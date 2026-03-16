@@ -58,8 +58,6 @@ The game now runs correctly with proper hints and difficulty ranges. For example
 
 > Screenshot shows the terminal output from running `pytest tests/test_game_logic.py -v` with all tests passing, and the Streamlit UI showing correct range display, hint messages, and a sidebar game log.
 
-(Place a screenshot named `pytest-results.png` in the repo root and it will render here.)
-
 ## 🚀 Stretch Features
 
 - [x] Added a **recent games log** sidebar that saves the last 10 completed games to `game_log.json` (win/loss, score, attempts, difficulty, timestamp).
