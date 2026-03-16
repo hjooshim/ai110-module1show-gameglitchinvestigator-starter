@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 # FIX: Refactored core logic from app.py into logic_utils.py using Copilot Agent mode
 def get_range_for_difficulty(difficulty: str):
     """Return (low, high) inclusive range for a given difficulty."""
@@ -75,3 +78,55 @@ def update_score(current_score: int, outcome: str, attempt_number: int):
         return current_score - 5
 
     return current_score
+
+
+def load_game_log(file_path, max_entries=10):
+    """Load the last `max_entries` games from a JSON log file."""
+    path = Path(file_path)
+    if not path.exists():
+        return []
+
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, list):
+            return []
+        return data[-max_entries:]
+    except Exception:
+        return []
+
+
+def append_game_log(file_path, entry: dict, max_entries=10):
+    """Append a new entry to the game log (stored as a JSON array)."""
+    path = Path(file_path)
+    log = load_game_log(path, max_entries=max_entries)
+    log.append(entry)
+    # keep only the most recent entries
+    log = log[-max_entries:]
+    path.write_text(json.dumps(log, indent=2))
+    return log
+
+
+def clear_game_log(file_path):
+    """Clear the saved game log file and return an empty list."""
+    path = Path(file_path)
+    if path.exists():
+        path.unlink()
+    return []
+
+
+def get_best_scores(file_path):
+    """Return best score per difficulty based on the saved game log."""
+    log = load_game_log(file_path, max_entries=1000)
+    best = {}
+    for entry in log:
+        diff = entry.get("difficulty")
+        score = entry.get("score")
+        if diff is None or score is None:
+            continue
+        # prefer higher score, tie-break on fewer attempts
+        current = best.get(diff)
+        if current is None or score > current["score"] or (
+            score == current["score"] and entry.get("attempts", 0) < current.get("attempts", 0)
+        ):
+            best[diff] = {"score": score, "attempts": entry.get("attempts", 0)}
+    return best

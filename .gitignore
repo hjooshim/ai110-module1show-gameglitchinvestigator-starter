@@ -32,6 +32,8 @@ coverage.xml
 # Logs
 *.log
 
+game_log.json
+
 # OS generated files
 .DS_Store
 Thumbs.db

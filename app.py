@@ -1,12 +1,21 @@
+import datetime
 import random
 import streamlit as st
 # FIX: Imported refactored functions from logic_utils.py using Copilot Agent mode
 from logic_utils import (
+    append_game_log,
+    clear_game_log,
+    get_best_scores,
     get_range_for_difficulty,
+    load_game_log,
     parse_guess,
     check_guess,
     update_score,
 )
+
+# New Feature: Game session log tracks recent plays and saves them to disk (game_log.json)
+# (Added after discussion with an AI agent to make the game more replayable and inspectable.)
+GAME_LOG_PATH = "game_log.json"
 
 st.set_page_config(page_title="Glitchy Guesser", page_icon="🎮")
 
@@ -48,7 +57,30 @@ if "status" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
-st.subheader("Make a guess")
+if "game_log" not in st.session_state:
+    st.session_state.game_log = load_game_log(GAME_LOG_PATH, max_entries=10)
+
+st.sidebar.markdown("### Recent games")
+for entry in reversed(st.session_state.game_log):
+    st.sidebar.markdown(
+        f"- **{entry['result']}** ({entry['difficulty']}) — {entry['score']} points, "
+        f"{entry['attempts']} attempts — {entry['timestamp']}"
+    )
+
+best_scores = get_best_scores(GAME_LOG_PATH)
+if best_scores:
+    st.sidebar.markdown("### Best scores")
+    for difficulty, record in best_scores.items():
+        st.sidebar.markdown(
+            f"- **{difficulty}**: {record['score']} pts ({record['attempts']} attempts)"
+        )
+
+if st.sidebar.button("Clear history"):
+    st.session_state.game_log = clear_game_log(GAME_LOG_PATH)
+    try:
+        st.rerun()
+    except AttributeError:
+        st.experimental_rerun()
 
 # FIX: Updated instruction text to use dynamic difficulty range instead of hardcoded 1-100
 st.info(
@@ -77,12 +109,22 @@ with col3:
     show_hint = st.checkbox("Show hint", value=True)
 
 if new_game:
+    # Reset all relevant session state so the new game actually starts fresh
     st.session_state.attempts = 0
+    st.session_state.score = 0
+    st.session_state.history = []
+    st.session_state.status = "playing"
+
     # FIXME: Secret was hardcoded to 1-100 instead of difficulty range
     # FIX: Changed secret generation to use difficulty range instead of hardcoded 1-100 using Copilot Agent mode
     st.session_state.secret = random.randint(low, high)
+
     st.success("New game started.")
-    st.rerun()
+    try:
+        st.rerun()
+    except AttributeError:
+        # Streamlit versions before 1.0 used experimental_rerun
+        st.experimental_rerun()
 
 if st.session_state.status != "playing":
     if st.session_state.status == "won":
@@ -121,6 +163,20 @@ if submit:
         if outcome == "Win":
             st.balloons()
             st.session_state.status = "won"
+
+            # New feature: append this completed game to the saved log
+            st.session_state.game_log = append_game_log(
+                GAME_LOG_PATH,
+                {
+                    "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+                    "difficulty": difficulty,
+                    "result": "Win",
+                    "attempts": st.session_state.attempts,
+                    "score": st.session_state.score,
+                },
+                max_entries=10,
+            )
+
             st.success(
                 f"You won! The secret was {st.session_state.secret}. "
                 f"Final score: {st.session_state.score}"
@@ -128,6 +184,20 @@ if submit:
         else:
             if st.session_state.attempts >= attempt_limit:
                 st.session_state.status = "lost"
+
+                # New feature: append this completed game to the saved log
+                st.session_state.game_log = append_game_log(
+                    GAME_LOG_PATH,
+                    {
+                        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+                        "difficulty": difficulty,
+                        "result": "Loss",
+                        "attempts": st.session_state.attempts,
+                        "score": st.session_state.score,
+                    },
+                    max_entries=10,
+                )
+
                 st.error(
                     f"Out of attempts! "
                     f"The secret was {st.session_state.secret}. "
